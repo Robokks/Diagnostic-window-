@@ -234,5 +234,38 @@ class Activity(QApplication):
     def notify(self,obj,event):
         if event.type() in (QEvent.Type.KeyPress,QEvent.Type.MouseButtonPress) and hasattr(self,'window'):self.window.activity=time.monotonic()
         return super().notify(obj,event)
+def open_store(directory=None):
+    """Open a persistent database; never silently switch account databases."""
+    path=Path(directory if directory is not None else os.environ.get('SYSTEMWINDOW_DATA_DIR') or Path(os.getenv('LOCALAPPDATA',str(Path.home())))/'SystemWindow').expanduser()
+    path.mkdir(parents=True,exist_ok=True)
+    return Store(path/'system.db')
+
+def startup_store():
+    directory=os.environ.get('SYSTEMWINDOW_DATA_DIR') or str(Path(os.getenv('LOCALAPPDATA',str(Path.home())))/'SystemWindow')
+    while True:
+        try:return open_store(directory)
+        except (OSError,sqlite3.Error) as exc:
+            box=QMessageBox()
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle('System Window — Storage unavailable')
+            box.setTextFormat(Qt.TextFormat.PlainText)
+            box.setText('Cannot open application data in:\n'+directory+'\n\n'+str(exc)+'\n\nSelect a private writable folder. Selecting a new folder may require creating a new local administrator. Existing accounts and history are not migrated.')
+            choose=box.addButton('Choose data folder',QMessageBox.ButtonRole.ActionRole)
+            box.addButton(QMessageBox.StandardButton.Cancel)
+            box.exec()
+            if box.clickedButton()!=choose:return None
+            selected=QFileDialog.getExistingDirectory(None,'Select private application data folder',str(Path.home()))
+            if not selected:return None
+            directory=str(Path(selected)/'SystemWindow')
+
+def main():
+    app=Activity(sys.argv)
+    app.setStyleSheet(STYLE)
+    store=startup_store()
+    if store is None:return 1
+    app.window=Window(store)
+    app.window.showMaximized()
+    return app.exec()
+
 if __name__=='__main__':
-    app=Activity(sys.argv);app.setStyleSheet(STYLE);path=Path(os.getenv('LOCALAPPDATA',str(Path.home())))/'SystemWindow';path.mkdir(exist_ok=True);app.window=Window(Store(path/'system.db'));app.window.showMaximized();sys.exit(app.exec())
+    sys.exit(main())
