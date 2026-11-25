@@ -57,3 +57,25 @@ def test_startup_cancel_on_denied(monkeypatch):
     monkeypatch.setattr(module, 'open_store', denied)
     monkeypatch.setattr(QMessageBox, 'exec', lambda self: 0)
     assert module.startup_store() is None
+
+def test_compact_layout(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    win = Window(Store(tmp_path / 'layout.db'))
+    try:
+        win.resize(1600, 900)
+        win.show()
+        app.processEvents()
+        assert 0 < win.login_card.width() <= 460
+        next(b for b in win.findChildren(QPushButton) if b.text() == 'Enter isolated demo').click()
+        win.tick()
+        assert len(win.metric_labels) == 4
+        assert len(win.drive_cards) == 3
+        first = win.metric_labels[0]
+        win.tick()
+        assert win.metric_labels[0] is first
+        assert win.nav_buttons[0].isChecked()
+        win.navigate(1)
+        assert win.nav_buttons[1].isChecked()
+    finally:
+        win.close()
+        win.receiver.join(3)
