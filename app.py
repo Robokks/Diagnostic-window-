@@ -3,7 +3,29 @@ from pathlib import Path
 from PySide6.QtCore import Qt,QTimer,QEvent
 from PySide6.QtWidgets import *
 from core import *
-STYLE='''QWidget{background:#080f1b;color:#e9f2fc;font:13px Segoe UI;} QFrame,QGroupBox,QTableWidget{background:#111d2e;border:1px solid #26384d;border-radius:8px;} QPushButton,QComboBox,QLineEdit,QPlainTextEdit{background:#18334a;border:1px solid #345068;border-radius:6px;padding:8px;} QPushButton:hover{border-color:#39d5ef;} QPushButton:disabled{color:#66788a;} QHeaderView::section{background:#152439;color:#8ca3ba;padding:8px;border:0;} QTableWidget::item:selected{background:#18566a;} QLabel{background:transparent;} QTabBar::tab{background:#152439;padding:10px;} QTabBar::tab:selected{background:#087a91;}'''
+STYLE='''QWidget{background:#080f1b;color:#e9f2fc;font-family:Segoe UI;font-size:13px;}
+QFrame#panel,QFrame#loginCard{background:#111d2e;border:1px solid #26384d;border-radius:12px;}
+QFrame#sidebar{background:#0c1726;border-right:1px solid #26384d;}
+QLabel{background:transparent;border:none;}
+QLabel#muted{color:#8ca3ba;font-size:12px;}
+QLabel#section{font-size:15px;font-weight:700;color:#e9f2fc;}
+QPushButton,QComboBox,QLineEdit,QPlainTextEdit{background:#14263a;border:1px solid #345068;border-radius:7px;padding:8px 12px;}
+QPushButton:hover,QLineEdit:focus,QComboBox:focus{border-color:#39d5ef;}
+QPushButton:disabled{color:#66788a;border-color:#26384d;}
+QPushButton#primary{background:#087a91;border-color:#12a6be;font-weight:700;}
+QPushButton#nav{background:transparent;border:0;text-align:left;padding:11px 14px;color:#a6bad0;}
+QPushButton#nav:checked{background:#193149;color:white;border-left:3px solid #39d5ef;}
+QPushButton#nav:hover{background:#15283b;}
+QTableWidget{background:#111d2e;alternate-background-color:#142238;border:1px solid #26384d;border-radius:7px;gridline-color:#203449;}
+QHeaderView::section{background:#152439;color:#8ca3ba;padding:9px 6px;border:0;font-weight:600;}
+QTableWidget::item:selected{background:#18566a;}
+QTabWidget::pane{border:1px solid #26384d;}
+QTabBar::tab{background:#152439;padding:10px 15px;margin-right:3px;}
+QTabBar::tab:selected{background:#087a91;}
+QScrollArea{border:none;background:transparent;}
+QScrollBar:vertical{background:#0c1726;width:10px;}
+QScrollBar::handle:vertical{background:#345068;min-height:24px;border-radius:4px;}
+'''
 PAGES=['Overview','Drive Diagnostics','PLC & Rack','I/O Explorer','Fault Center','Event History','Configuration']
 SIGNALS=['speed_setpoint','speed','torque_setpoint','torque','current','speed_low','speed_high','torque_low','torque_high','current_limit','position_setpoint','position']
 CW=['ON/OFF1','OFF2 permission','OFF3 permission','Enable operation','Ramp enable','Ramp continue','Setpoint enable','Fault acknowledge','Jog 1','Jog 2','PLC control','Direction / configured']
@@ -13,7 +35,7 @@ def text_dialog(parent,title,label,value='',password=False):
     v,ok=QInputDialog.getText(parent,title,label,QLineEdit.EchoMode.Password if password else QLineEdit.EchoMode.Normal,str(value));return v if ok else None
 
 def table(headers,rows):
-    t=QTableWidget(len(rows),len(headers));t.setHorizontalHeaderLabels(headers);t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows);t.verticalHeader().hide()
+    t=QTableWidget(len(rows),len(headers));t.setHorizontalHeaderLabels(headers);t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows);t.verticalHeader().hide();t.setAlternatingRowColors(True);t.setShowGrid(False);t.verticalHeader().setDefaultSectionSize(32)
     for r,row in enumerate(rows):
         for c,v in enumerate(row):
             item=QTableWidgetItem('—' if v is None else str(v));t.setItem(r,c,item)
@@ -33,25 +55,55 @@ class Window(QMainWindow):
     def button(self,label,fn,action=None):
         b=QPushButton(label);b.clicked.connect(lambda:self.safe(fn));b.setEnabled(action is None or self.allowed(action));return b
     def login(self):
-        self.role=None;self.user=None;self.demo=False;self.mode='LIVE';self.data={};self.last=0;self.active={};self.alarms=[];w=QWidget();l=QVBoxLayout(w);l.setAlignment(Qt.AlignmentFlag.AlignCenter);title=QLabel('SYSTEM WINDOW  |  ENGINEERING WORKSPACE');title.setStyleSheet('font-size:28px;color:#39d5ef;font-weight:bold');l.addWidget(title);setup=not self.store.users();l.addWidget(QLabel('Create first Administrator' if setup else 'Secure workspace access'));n=QLineEdit();n.setPlaceholderText('Username');p=QLineEdit();p.setPlaceholderText('Password');p.setEchoMode(QLineEdit.EchoMode.Password);l.addWidget(n);l.addWidget(p)
+        self.role=None;self.user=None;self.demo=False;self.mode='LIVE';self.data={};self.last=0;self.active={};self.alarms=[]
+        w=QWidget();outer=QVBoxLayout(w);outer.setContentsMargins(24,24,24,24);outer.addStretch()
+        card=QFrame();card.setObjectName('loginCard');card.setMaximumWidth(460);card.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Preferred)
+        self.login_card=card
+        l=QVBoxLayout(card);l.setContentsMargins(32,30,32,30);l.setSpacing(12)
+        mark=QLabel('SYSTEM WINDOW');mark.setStyleSheet('font-size:26px;color:#39d5ef;font-weight:800;letter-spacing:2px;');l.addWidget(mark)
+        subtitle=QLabel('INDUSTRIAL SYSTEM MONITORING');subtitle.setObjectName('muted');l.addWidget(subtitle);l.addSpacing(12)
+        setup=not self.store.users();heading=QLabel('Create administrator' if setup else 'Sign in');heading.setStyleSheet('font-size:22px;font-weight:700;');l.addWidget(heading)
+        hint=QLabel('Set up your local engineering account.' if setup else 'Access your engineering workspace.');hint.setObjectName('muted');hint.setWordWrap(True);l.addWidget(hint)
+        l.addWidget(QLabel('Username'));n=QLineEdit();n.setPlaceholderText('Enter username');n.setMaxLength(40);n.setMinimumHeight(40);l.addWidget(n)
+        l.addWidget(QLabel('Password'));p=QLineEdit();p.setPlaceholderText('At least 12 characters' if setup else 'Enter password');p.setMaxLength(256);p.setEchoMode(QLineEdit.EchoMode.Password);p.setMinimumHeight(40);l.addWidget(p)
+        confirm=QLineEdit();confirm.setEchoMode(QLineEdit.EchoMode.Password);confirm.setMaxLength(256);confirm.setMinimumHeight(40)
+        if setup:l.addWidget(QLabel('Confirm password'));l.addWidget(confirm)
+        show=QCheckBox('Show password');show.toggled.connect(lambda on:[x.setEchoMode(QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password) for x in (p,confirm)]);l.addWidget(show)
         def submit():
-            if setup:self.store.create(n.text(),p.text(),'Administrator')
-            r=self.store.login(n.text(),p.text());p.clear()
+            if setup:
+                if p.text()!=confirm.text():raise ValueError('Passwords do not match')
+                self.store.create(n.text(),p.text(),'Administrator')
+            r=self.store.login(n.text(),p.text());p.clear();confirm.clear()
             if not r:raise ValueError('Invalid credentials')
             self.role=r;self.user=n.text();self.c=self.store.load();self.activity=time.monotonic();self.build()
         def demo():self.demo=True;self.mode='SIMULATION';self.role='Administrator';self.user='Demo';self.c=defaults();self.activity=time.monotonic();self.build()
-        l.addWidget(self.button('Create account' if setup else 'Sign in',submit));l.addWidget(self.button('Enter isolated demo',demo));self.setCentralWidget(w)
+        primary=self.button('Create account' if setup else 'Sign in',submit);primary.setObjectName('primary');primary.setMinimumHeight(42);l.addWidget(primary)
+        (confirm if setup else p).returnPressed.connect(lambda:self.safe(submit))
+        l.addSpacing(4);demo_btn=self.button('Enter isolated demo',demo);demo_btn.setMinimumHeight(40);l.addWidget(demo_btn)
+        footer=QLabel('Simulation requires no connection to industrial hardware.');footer.setObjectName('muted');footer.setWordWrap(True);l.addWidget(footer)
+        row=QHBoxLayout();row.addStretch();row.addWidget(card,1);row.addStretch();outer.addLayout(row);outer.addStretch();self.setCentralWidget(w);n.setFocus()
     def build(self):
-        w=QWidget();root=QHBoxLayout(w);side=QVBoxLayout();root.addLayout(side);brand=QLabel('SYSTEM WINDOW');brand.setStyleSheet('font-size:22px;color:#39d5ef;font-weight:bold');side.addWidget(brand)
-        for i,p in enumerate(PAGES):side.addWidget(self.button(p,lambda i=i:self.navigate(i),'configure' if i==6 else None))
-        side.addStretch();side.addWidget(QLabel('INDUSTRIAL SYSTEM MONITORING\nLabVIEW data source'));side.addWidget(self.button('Sign out',self.login));main=QVBoxLayout();root.addLayout(main,1);top=QHBoxLayout();main.addLayout(top);self.heading=QLabel();self.heading.setStyleSheet('font-size:24px;font-weight:bold');top.addWidget(self.heading);top.addStretch();self.status=QLabel();top.addWidget(self.status);top.addWidget(QLabel(f'{self.user} · {self.role}'));top.addWidget(self.button('Users',self.users,'users'));top.addWidget(self.button('Password',self.password));top.addWidget(self.button('Switch mode',self.switch,'simulate'));top.addWidget(self.button('Inject fault',self.inject,'simulate'));top.addWidget(self.button('Clear demo faults',self.clear,'simulate'));self.content=QVBoxLayout();main.addLayout(self.content,1);main.addWidget(QLabel('Monitoring only · No PLC / drive write commands'));self.setCentralWidget(w);self.navigate(0)
+        w=QWidget();root=QHBoxLayout(w);root.setContentsMargins(0,0,0,0);root.setSpacing(0)
+        rail=QFrame();rail.setObjectName('sidebar');rail.setFixedWidth(218);root.addWidget(rail);side=QVBoxLayout(rail);side.setContentsMargins(12,20,12,16);side.setSpacing(5)
+        brand=QLabel('SYSTEM WINDOW');brand.setStyleSheet('font-size:20px;color:#39d5ef;font-weight:800');side.addWidget(brand)
+        sub=QLabel('INDUSTRIAL MONITORING');sub.setObjectName('muted');side.addWidget(sub);side.addSpacing(20)
+        self.nav_buttons=[];group=QButtonGroup(self);group.setExclusive(True);self.nav_group=group
+        for i,p in enumerate(PAGES):
+            b=self.button(p,lambda i=i:self.navigate(i),'configure' if i==6 else None);b.setObjectName('nav');b.setCheckable(True);group.addButton(b,i);self.nav_buttons.append(b);side.addWidget(b)
+        side.addStretch();info=QLabel('REFERENCE SYSTEM\nLabVIEW data source\nRead-only monitoring');info.setWordWrap(True);info.setObjectName('muted');side.addWidget(info);side.addSpacing(10);side.addWidget(self.button('Sign out',self.login))
+        body=QWidget();root.addWidget(body,1);main=QVBoxLayout(body);main.setContentsMargins(20,16,20,12);main.setSpacing(12)
+        top=QHBoxLayout();main.addLayout(top);titles=QVBoxLayout();eyebrow=QLabel('MACHINE HEALTH MONITORING');eyebrow.setStyleSheet('color:#39d5ef;font-weight:700;font-size:11px;');titles.addWidget(eyebrow);self.heading=QLabel();self.heading.setStyleSheet('font-size:24px;font-weight:700');titles.addWidget(self.heading);top.addLayout(titles);top.addStretch()
+        self.status=QLabel('SIMULATION ONLY' if self.mode=='SIMULATION' else 'OFFLINE / STALE');self.status.setStyleSheet('color:#ffbd5a;background:#17283b;border-radius:8px;padding:8px 12px;font-weight:600;');top.addWidget(self.status)
+        tools=QHBoxLayout();main.addLayout(tools);account=QLabel(f'{self.user} · {self.role}');account.setObjectName('muted');tools.addWidget(account);tools.addStretch()
+        for label,fn,action in [('Users',self.users,'users'),('Password',self.password,None),('Switch mode',self.switch,'simulate'),('Inject fault',self.inject,'simulate'),('Clear demo faults',self.clear,'simulate')]:tools.addWidget(self.button(label,fn,action))
+        self.content=QVBoxLayout();self.content.setSpacing(10);main.addLayout(self.content,1);footer=QLabel('SYSTEM WINDOW   /   Monitoring only · No PLC or drive write commands');footer.setObjectName('muted');main.addWidget(footer);self.setCentralWidget(w);self.navigate(0)
     def switch(self):
         self.require('simulate')
         if self.demo:raise ValueError('Sign in to use live mode')
         self.mode='SIMULATION' if self.mode=='LIVE' else 'LIVE';self.data={};self.last=0;self.active={};self.alarms=[];self.render()
     def navigate(self,i):
         if i==6:self.require('configure')
-        self.page=i;self.render()
+        self.page=i;self.nav_buttons[i].setChecked(True);self.render()
     def tick(self):
         if not self.role:return
         if time.monotonic()-self.activity>1800 and QApplication.activeModalWidget() is None:self.login();return
@@ -64,7 +116,8 @@ class Window(QMainWindow):
         if self.mode=='LIVE' and time.monotonic()-self.last>3:
             if self.data:self.data={};changed=True
         self.status.setText('SIMULATION ONLY' if self.mode=='SIMULATION' else 'LIVE · LabVIEW' if self.data else 'OFFLINE / STALE')
-        if changed and self.page in (0,2,4):self.render()
+        if changed and self.page==0:self.refresh_overview()
+        elif changed and self.page in (2,4):self.render()
         elif changed and self.page in (1,3):self.update_live()
     def transitions(self,alarms):
         new={(a['target'],a['code']):a for a in alarms}
@@ -95,7 +148,7 @@ class Window(QMainWindow):
     def render(self):
         self.clear_layout();self.heading.setText(PAGES[self.page]);self.live_table=None
         if self.page==0:
-            metrics=QLabel(f'SYSTEM STATUS: {"UNKNOWN" if not self.data else "FAULT / WARNING" if self.active else "MONITORING"}     |     DRIVES: {len(self.c["drives"])}     |     I/O: {len(channels(self.c))}     |     ALARMS: {len(self.active)}');metrics.setStyleSheet('font-size:20px;color:#39d5ef;padding:16px');self.add(metrics);self.add(QLabel('Drive network'));t=self.add(table(['Drive','Model','Health','Speed RPM','Current A'],[[d['id'],d['model'],self.get('drives',d['id']).get('status','UNKNOWN'),self.get('drives',d['id']).get('speed'),self.get('drives',d['id']).get('current')] for d in self.c['drives']]));t.cellDoubleClicked.connect(lambda r,c:self.open_drive(t.item(r,0).text()));self.add(QLabel('Local rack health'));self.add(table(['Module','Type','Slot','Health'],[[m['id'],m['type'],m['slot'],self.get('modules',m['id']).get('status','UNKNOWN')] for m in self.c['modules']]))
+            self.overview()
         elif self.page==1:self.drive_page()
         elif self.page==2:
             t=self.add(table(['Module','Type','Name','Slot','Capacity','Order number','Health'],[[m[k] for k in ('id','type','name','slot','capacity','orderNo')]+[self.get('modules',m['id']).get('status','UNKNOWN')] for m in self.c['modules']]));t.cellDoubleClicked.connect(lambda r,c:self.open_module(t.item(r,1).text()))
@@ -105,6 +158,35 @@ class Window(QMainWindow):
         elif self.page==5:
             rows=[] if self.demo else self.store.history();self.add(self.button('Export history CSV',lambda:self.export(['ID','UTC','Event','Equipment','Code','Description'],rows),'export'));self.add(table(['ID','UTC','Event','Equipment','Code','Description'],rows))
         else:self.config_page()
+    def panel(self,title):
+        f=QFrame();f.setObjectName('panel');l=QVBoxLayout(f);l.setContentsMargins(14,12,14,12);l.setSpacing(8)
+        h=QLabel(title);h.setObjectName('section');l.addWidget(h);return f,l
+    def overview(self):
+        scroll=QScrollArea();scroll.setWidgetResizable(True);self.add(scroll);body=QWidget();scroll.setWidget(body);layout=QVBoxLayout(body);layout.setContentsMargins(0,0,4,0);layout.setSpacing(12)
+        metric_row=QHBoxLayout();layout.addLayout(metric_row);self.metric_labels=[]
+        for title in ('SYSTEM STATUS','PROFINET DRIVES','I/O CHANNELS','ACTIVE ALARMS'):
+            f,l=self.panel(title);v=QLabel();v.setStyleSheet('font-size:24px;font-weight:750;color:#39d5ef;');v.setWordWrap(True);l.addWidget(v);metric_row.addWidget(f,1);self.metric_labels.append(v)
+        mid=QHBoxLayout();layout.addLayout(mid);network,nl=self.panel('PROFINET Drive Network');mid.addWidget(network,3);health,hl=self.panel('System Health');mid.addWidget(health,2)
+        grid=QGridLayout();nl.addLayout(grid);self.drive_cards={}
+        for j,d in enumerate(self.c['drives']):
+            f,l=self.panel(d['id']);model=QLabel(d['model']);model.setTextFormat(Qt.TextFormat.PlainText);model.setObjectName('muted');l.addWidget(model);state=QLabel();l.addWidget(state);values=QLabel();values.setTextFormat(Qt.TextFormat.PlainText);l.addWidget(values);l.addWidget(self.button('Open diagnostics',lambda i=d['id']:self.open_drive(i)));grid.addWidget(f,j//3,j%3);self.drive_cards[d['id']]=(state,values)
+        self.health_text=QLabel();self.health_text.setTextFormat(Qt.TextFormat.PlainText);self.health_text.setWordWrap(True);hl.addWidget(self.health_text);hl.addStretch()
+        rack,rl=self.panel('Local Rack Health');layout.addWidget(rack);rg=QGridLayout();rl.addLayout(rg);self.module_cards={}
+        for j,m in enumerate(self.c['modules']):
+            b=self.button('',lambda t=m['type']:self.open_module(t));b.setMinimumHeight(74);rg.addWidget(b,j//8,j%8);self.module_cards[m['id']]=(b,m)
+        events,el=self.panel('Active Diagnostic Events');layout.addWidget(events);self.overview_events=table(['Severity','Equipment','Code','Description'],[]);self.overview_events.setMinimumHeight(150);el.addWidget(self.overview_events);el.addWidget(self.button('Open fault center',lambda:self.navigate(4)));layout.addStretch();self.refresh_overview()
+    def refresh_overview(self):
+        colors={'OK':'#3bd7a3','WARN':'#ffbd5a','FAULT':'#ff6478','OFFLINE':'#8ca3ba','UNKNOWN':'#8ca3ba'}
+        bad=any(a['severity']=='FAULT' for a in self.active.values());status='OFFLINE' if not self.data else 'FAULT' if bad else 'WARN' if self.active else 'MONITORING'
+        healthy=sum(self.get('drives',d['id']).get('status')=='OK' for d in self.c['drives'])
+        for label,value in zip(self.metric_labels,(status,f'{healthy} / {len(self.c["drives"])}',str(len(channels(self.c))),str(len(self.active)))):label.setText(value)
+        self.metric_labels[0].setStyleSheet('font-size:23px;font-weight:750;color:'+colors.get(status,'#39d5ef'))
+        for i,(state,values) in self.drive_cards.items():
+            d=self.get('drives',i);st=d.get('status','UNKNOWN');state.setText(st);state.setStyleSheet('font-weight:700;color:'+colors.get(st,'#8ca3ba'));values.setText(f'Speed     {d.get("speed","—")} RPM\nCurrent   {d.get("current","—")} A\nTorque    {d.get("torque","—")}')
+        for i,(b,m) in self.module_cards.items():
+            st=self.get('modules',i).get('status','UNKNOWN');b.setText(f'{m["id"]}\n{m["type"]} · {m["capacity"]}\n{st}');b.setStyleSheet('color:'+colors.get(st,'#8ca3ba'))
+        self.health_text.setText(f'Controller: {self.c["system"].get("plc","—")}\n\nSource: {self.mode}\n\nCommunication: {"Data available" if self.data else "Unavailable"}\n\nConfigured modules: {len(self.c["modules"])}\n\nMonitoring only')
+        self.fill(self.overview_events,[[a[k] for k in ('severity','target','code','description')] for a in self.active.values()])
     def open_drive(self,i):self.drive=i;self.navigate(1)
     def open_module(self,t):self.io_type=t if t in TYPES else 'ALL';self.navigate(3)
     def drive_page(self):
